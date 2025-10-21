@@ -1,0 +1,17 @@
+{
+  "name": "star-spark",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build -ws",
+    "dev": "npm run dev -ws",
+    "lint": "npm run lint -ws",
+    "format": "npm run format -ws",
+    "test": "npm run test -ws",
+    "typecheck": "npm run typecheck -ws"
+  }
+}

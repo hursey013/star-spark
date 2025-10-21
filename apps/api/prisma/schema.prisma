@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Cadence {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+model User {
+  id                String      @id @default(cuid())
+  githubId          String      @unique
+  username          String
+  avatarUrl         String
+  email             String
+  notificationEmail String
+  emailVerifiedAt   DateTime?
+  cadence           Cadence     @default(WEEKLY)
+  filters           Json?
+  lastDigestSentAt  DateTime?
+  tokens            OAuthToken[]
+  reminders         Reminder[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model OAuthToken {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  accessToken  String
+  refreshToken String?
+  scopes       String
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Reminder {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  repoId         Int
+  repoFullName   String
+  repoDescription String?
+  starDate       DateTime?
+  topics         Json?
+  language       String?
+  htmlUrl        String
+  lastSentAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, repoId], map: "reminder_user_repo_unique")
+}

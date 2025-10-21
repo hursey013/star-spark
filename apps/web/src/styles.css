@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-brand-slate text-brand-sky-100 font-sans antialiased;
+}
+
+a {
+  @apply text-brand-sky-300 hover:text-brand-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-sky-400;
+}
+
+button:focus-visible {
+  @apply outline-none ring-2 ring-offset-2 ring-offset-brand-slate ring-brand-sky-400;
+}
