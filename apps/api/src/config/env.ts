@@ -1,6 +1,21 @@
-import 'dotenv/config';
-
+import { config as loadEnv } from 'dotenv';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { z } from 'zod';
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+
+const envPaths = [
+  resolve(currentDir, '../../../../.env'),
+  resolve(currentDir, '../../.env'),
+  resolve(currentDir, '../../prisma/.env')
+];
+
+for (const path of envPaths) {
+  loadEnv({ path, override: false });
+}
+
+loadEnv();
 
 const envSchema = z
   .object({

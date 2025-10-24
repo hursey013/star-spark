@@ -32,6 +32,23 @@ export const createApp = () => {
     })
   );
 
+  app.use((req, _res, next) => {
+    if (req.session) {
+      if (!req.session.regenerate) {
+        req.session.regenerate = (callback) => {
+          callback?.();
+        };
+      }
+
+      if (!req.session.save) {
+        req.session.save = (callback) => {
+          callback?.();
+        };
+      }
+    }
+    next();
+  });
+
   if (env.NODE_ENV !== 'test') {
     app.use(morgan('tiny'));
   }

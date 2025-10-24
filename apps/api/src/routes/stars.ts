@@ -18,7 +18,11 @@ starsRouter.get('/', async (req, res, next) => {
 
   try {
     const query = querySchema.parse(req.query);
-    const items = await fetchStarredRepositories(req.userId!, query);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: req.userId! },
+      select: { id: true, username: true }
+    });
+    const items = await fetchStarredRepositories(user, query);
     res.json({ items });
   } catch (error) {
     next(error);
@@ -27,7 +31,9 @@ starsRouter.get('/', async (req, res, next) => {
 
 starsRouter.get('/digest-preview', async (req, res, next) => {
   try {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: req.userId! }
+    });
     const digest = await generateReminderDigest(user);
     res.json({ digest });
   } catch (error) {

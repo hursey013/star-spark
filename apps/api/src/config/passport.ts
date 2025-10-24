@@ -5,7 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { logger } from '../lib/logger.js';
 import { env } from './env.js';
 
-export const githubScopes = ['read:user', 'user:email', 'repo'] as const;
+export const githubScopes = ['read:user', 'user:email'] as const;
 
 passport.serializeUser((user: Express.User, done) => {
   done(null, (user as { id: string }).id);

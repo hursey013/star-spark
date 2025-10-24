@@ -1,13 +1,15 @@
 import express from 'express';
-import { Cadence } from '@prisma/client';
 import { z } from 'zod';
 
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { cadenceSchema, Cadence } from '../domain/cadence.js';
+import { presentUser } from '../lib/userPresenter.js';
+import { serializeUserFilters, UserFilters } from '../lib/userFilters.js';
 
 const preferencesSchema = z.object({
   notificationEmail: z.string().email().optional(),
-  cadence: z.nativeEnum(Cadence).optional(),
+  cadence: cadenceSchema.optional(),
   filters: z
     .object({
       languages: z.array(z.string()).optional(),
@@ -25,14 +27,18 @@ settingsRouter.use(requireAuth);
 
 settingsRouter.patch('/', async (req, res, next) => {
   try {
-    const payload = preferencesSchema.parse(req.body);
+    const payload = preferencesSchema.parse(req.body) as {
+      notificationEmail?: string;
+      cadence?: Cadence;
+      filters?: UserFilters | null;
+    };
 
     const user = await prisma.user.update({
       where: { id: req.userId },
       data: {
         notificationEmail: payload.notificationEmail ?? undefined,
         cadence: payload.cadence ?? undefined,
-        filters: payload.filters === null ? null : payload.filters ?? undefined
+        filters: serializeUserFilters(payload.filters)
       },
       select: {
         id: true,
@@ -43,7 +49,7 @@ settingsRouter.patch('/', async (req, res, next) => {
       }
     });
 
-    res.json({ user });
+    res.json({ user: presentUser(user) });
   } catch (error) {
     next(error);
   }

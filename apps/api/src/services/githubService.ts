@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 import { prisma } from '../lib/prisma.js';
+import { logger } from '../lib/logger.js';
 
 export interface StarredRepository {
   id: number;
@@ -42,36 +43,57 @@ githubApi.interceptors.response.use(
   }
 );
 
-const toStarredRepository = (item: any): StarredRepository => ({
-  id: item.id,
-  full_name: item.full_name,
-  description: item.description,
-  language: item.language,
-  stargazers_count: item.stargazers_count,
-  html_url: item.html_url,
-  archived: item.archived,
-  fork: item.fork,
-  topics: item.topics ?? [],
-  created_at: item.created_at,
-  updated_at: item.updated_at,
-  starred_at: item.starred_at,
-  owner: {
-    login: item.owner.login,
-    avatar_url: item.owner.avatar_url,
-    html_url: item.owner.html_url
+const toStarredRepository = (item: any): StarredRepository => {
+  if (item.starred_at && item.repo) {
+    const repo = item.repo;
+    return {
+      id: repo.id,
+      full_name: repo.full_name,
+      description: repo.description,
+      language: repo.language,
+      stargazers_count: repo.stargazers_count,
+      html_url: repo.html_url,
+      archived: repo.archived,
+      fork: repo.fork,
+      topics: repo.topics ?? [],
+      created_at: repo.created_at,
+      updated_at: repo.updated_at,
+      starred_at: item.starred_at,
+      owner: {
+        login: repo.owner?.login ?? '',
+        avatar_url: repo.owner?.avatar_url ?? '',
+        html_url: repo.owner?.html_url ?? ''
+      }
+    };
   }
-});
+
+  return {
+    id: item.id,
+    full_name: item.full_name,
+    description: item.description,
+    language: item.language,
+    stargazers_count: item.stargazers_count,
+    html_url: item.html_url,
+    archived: item.archived,
+    fork: item.fork,
+    topics: item.topics ?? [],
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    starred_at: item.starred_at,
+    owner: {
+      login: item.owner?.login ?? '',
+      avatar_url: item.owner?.avatar_url ?? '',
+      html_url: item.owner?.html_url ?? ''
+    }
+  };
+};
 
 const resolveToken = async (userId: string) => {
   const token = await prisma.oAuthToken.findFirst({
     where: { userId }
   });
 
-  if (!token) {
-    throw new Error('No GitHub token available');
-  }
-
-  return token.accessToken;
+  return token?.accessToken ?? null;
 };
 
 export interface FetchStarredParams {
@@ -83,31 +105,90 @@ export interface FetchStarredParams {
 }
 
 export const fetchStarredRepositories = async (
-  userId: string,
+  user: { id: string; username: string },
   params: FetchStarredParams = {}
 ): Promise<StarredRepository[]> => {
-  const accessToken = await resolveToken(userId);
-  const response = await githubApi.get('/user/starred', {
-    params: {
-      per_page: params.perPage ?? 50,
-      page: params.page ?? 1,
-      sort: params.sort ?? 'created',
-      direction: params.direction ?? 'desc'
-    },
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    }
-  });
+  const accessToken = await resolveToken(user.id);
 
-  const starred = Array.isArray(response.data) ? response.data : response.data.items;
-  return (starred ?? []).map(toStarredRepository);
+  if (accessToken) {
+    try {
+      logger.debug({ userId: user.id, username: user.username }, 'Fetching starred repositories via /user/starred');
+      const response = await githubApi.get('/user/starred', {
+        params: {
+          per_page: params.perPage ?? 50,
+          page: params.page ?? 1,
+          sort: params.sort ?? 'created',
+          direction: params.direction ?? 'desc'
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      const starred = Array.isArray(response.data) ? response.data : response.data.items;
+      return (starred ?? []).map(toStarredRepository);
+    } catch (error) {
+      logger.warn(
+        {
+          userId: user.id,
+          username: user.username,
+          error: axios.isAxiosError(error)
+            ? {
+                status: error.response?.status,
+                message: error.response?.data?.message ?? error.message,
+                headers: error.response?.headers
+              }
+            : { message: (error as Error).message }
+        },
+        'Failed to fetch /user/starred; falling back to public endpoint'
+      );
+    }
+  }
+
+  try {
+    logger.debug(
+      { userId: user.id, username: user.username },
+      'Fetching starred repositories via /users/{username}/starred'
+    );
+    const response = await githubApi.get(`/users/${user.username}/starred`, {
+      params: {
+        per_page: params.perPage ?? 50,
+        page: params.page ?? 1,
+        sort: params.sort ?? 'created',
+        direction: params.direction ?? 'desc'
+      }
+    });
+
+    const starred = Array.isArray(response.data) ? response.data : response.data.items;
+    return (starred ?? []).map(toStarredRepository);
+  } catch (error) {
+    logger.error(
+      {
+        userId: user.id,
+        username: user.username,
+        error: axios.isAxiosError(error)
+          ? {
+              status: error.response?.status,
+              message: error.response?.data?.message ?? error.message,
+              headers: error.response?.headers
+            }
+          : { message: (error as Error).message }
+      },
+      'Failed to fetch starred repositories'
+    );
+    throw new Error(
+      axios.isAxiosError(error)
+        ? `Unable to fetch starred repositories: ${error.response?.data?.message ?? error.message}`
+        : `Unable to fetch starred repositories: ${(error as Error).message}`
+    );
+  }
 };
 
 export const fetchStarredWithSince = async (
-  userId: string,
+  user: { id: string; username: string },
   since: Date
 ): Promise<StarredRepository[]> => {
-  const starred = await fetchStarredRepositories(userId, {
+  const starred = await fetchStarredRepositories(user, {
     perPage: 100,
     sort: 'created',
     direction: 'desc'

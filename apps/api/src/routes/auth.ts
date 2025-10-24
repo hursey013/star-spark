@@ -3,6 +3,7 @@ import express from 'express';
 import { env } from '../config/env.js';
 import { githubPassport, githubScopes } from '../config/passport.js';
 import { prisma } from '../lib/prisma.js';
+import { presentUser } from '../lib/userPresenter.js';
 
 export const authRouter = express.Router();
 
@@ -63,5 +64,5 @@ authRouter.get('/me', async (req, res) => {
     }
   });
 
-  res.json({ user });
+  res.json({ user: user ? presentUser(user) : null });
 });

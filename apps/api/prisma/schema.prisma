@@ -7,13 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Cadence {
-  DAILY
-  WEEKLY
-  BIWEEKLY
-  MONTHLY
-}
-
 model User {
   id                String      @id @default(cuid())
   githubId          String      @unique
@@ -22,8 +15,8 @@ model User {
   email             String
   notificationEmail String
   emailVerifiedAt   DateTime?
-  cadence           Cadence     @default(WEEKLY)
-  filters           Json?
+  cadence           String      @default("WEEKLY")
+  filters           String?
   lastDigestSentAt  DateTime?
   tokens            OAuthToken[]
   reminders         Reminder[]
@@ -51,7 +44,7 @@ model Reminder {
   repoFullName   String
   repoDescription String?
   starDate       DateTime?
-  topics         Json?
+  topics         String?
   language       String?
   htmlUrl        String
   lastSentAt     DateTime?

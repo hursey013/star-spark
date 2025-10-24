@@ -1,4 +1,4 @@
-import { Cadence, User } from '@prisma/client';
+import type { User } from '@prisma/client';
 
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
@@ -6,6 +6,8 @@ import {
   fetchStarredRepositories,
   StarredRepository
 } from './githubService.js';
+import { Cadence, DEFAULT_CADENCE, isCadence } from '../domain/cadence.js';
+import { deserializeUserFilters, UserFilters } from '../lib/userFilters.js';
 
 export interface DigestRepoItem {
   id: number;
@@ -91,17 +93,27 @@ const toDigestRepo = (repo: StarredRepository, vibeKey: keyof typeof vibeLibrary
   vibe: pickVibe(vibeKey)
 });
 
+const resolveCadence = (value: string): Cadence => {
+  return isCadence(value) ? value : DEFAULT_CADENCE;
+};
+
+const getUserFilters = (filters: User['filters']): UserFilters => {
+  return deserializeUserFilters(filters) ?? {};
+};
+
+const serializeTopics = (topics: string[] | undefined): string => {
+  return JSON.stringify(topics ?? []);
+};
+
 const applyFilters = (repos: StarredRepository[], user: User) => {
-  const filters = (user.filters as Record<string, unknown>) ?? {};
+  const filters = getUserFilters(user.filters);
   return repos.filter((repo) => {
-    const languages = (filters.languages as string[] | undefined)?.map((item) =>
-      item.toLowerCase()
-    );
+    const languages = filters.languages?.map((item) => item.toLowerCase());
     if (languages?.length && repo.language && !languages.includes(repo.language.toLowerCase())) {
       return false;
     }
 
-    const topics = (filters.topics as string[] | undefined)?.map((item) => item.toLowerCase());
+    const topics = filters.topics?.map((item) => item.toLowerCase());
     if (topics?.length) {
       const repoTopics = (repo.topics ?? []).map((topic) => topic.toLowerCase());
       const hasTopic = topics.some((topic) => repoTopics.includes(topic));
@@ -110,12 +122,12 @@ const applyFilters = (repos: StarredRepository[], user: User) => {
       }
     }
 
-    const minimumStars = filters.minimumStars as number | undefined;
+    const minimumStars = filters.minimumStars;
     if (minimumStars && repo.stargazers_count < minimumStars) {
       return false;
     }
 
-    const includeArchived = Boolean(filters.includeArchived);
+    const includeArchived = filters.includeArchived ?? false;
     if (!includeArchived && repo.archived) {
       return false;
     }
@@ -208,7 +220,10 @@ const createSerendipityHighlight = (repos: StarredRepository[]): DigestHighlight
 };
 
 export const generateReminderDigest = async (user: User): Promise<ReminderDigest> => {
-  const starred = await fetchStarredRepositories(user.id, { perPage: 100 });
+  const starred = await fetchStarredRepositories(
+    { id: user.id, username: user.username },
+    { perPage: 100 }
+  );
   const windowStart = new Date(Date.now() - env.REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   const eligible = applyFilters(
@@ -244,7 +259,7 @@ export const userIsDueForDigest = (user: User): boolean => {
     return true;
   }
 
-  const cadenceDays = cadenceToDays(user.cadence);
+  const cadenceDays = cadenceToDays(resolveCadence(user.cadence));
   const msSinceLast = Date.now() - user.lastDigestSentAt.getTime();
   return msSinceLast >= cadenceDays * 24 * 60 * 60 * 1000;
 };
@@ -274,7 +289,7 @@ export const markDigestSent = async (userId: string, repos: DigestRepoItem[]) =>
           repoFullName: repo.fullName,
           repoDescription: repo.description,
           starDate: repo.starredAt ? new Date(repo.starredAt) : undefined,
-          topics: repo.topics,
+          topics: serializeTopics(repo.topics),
           language: repo.language,
           htmlUrl: repo.htmlUrl,
           lastSentAt: new Date()
@@ -285,7 +300,7 @@ export const markDigestSent = async (userId: string, repos: DigestRepoItem[]) =>
           repoFullName: repo.fullName,
           repoDescription: repo.description,
           starDate: repo.starredAt ? new Date(repo.starredAt) : undefined,
-          topics: repo.topics,
+          topics: serializeTopics(repo.topics),
           language: repo.language,
           htmlUrl: repo.htmlUrl,
           lastSentAt: new Date()
